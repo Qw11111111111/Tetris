@@ -191,10 +191,10 @@ impl App {
             KeyCode::Char('q') => self.exit(),
             KeyCode::Esc => self.pause()?,
             KeyCode::Enter => self.restart()?,
-            KeyCode::Right => self.current_piece.move_right()?,
-            KeyCode::Left => self.current_piece.move_left()?,
-            KeyCode::Down => self.current_piece.move_down()?,
-            KeyCode::Up => self.current_piece.rotate()?,
+            KeyCode::Right => self.move_current_right()?,
+            KeyCode::Left => self.move_current_left()?,
+            KeyCode::Down => self.move_current_down()?,
+            KeyCode::Up => self.rotate_current()?,
             _ => {}
         }
         Ok(())
@@ -281,10 +281,56 @@ impl App {
         else if random_num == 3 {
             self.current_piece = Piece::t_piece();
         }
+        /*
         for _ in 0..rng.gen_range(0..3) {
             self.current_piece.rotate()?;
         }
+        */
         self.current_piece.color = colors[rng.gen_range(0..colors.len())];
+        Ok(())
+    }
+
+    fn move_current_down(&mut self) -> Result<()> {
+        let mut current_piece = self.current_piece.clone();
+        current_piece.move_down()?;
+        if !current_piece.components.iter().map(|cmp| {
+            self.pieces.iter().map(|piece| {
+                piece.is_blocked(cmp)
+            }).any(|x| x)
+        }).any(|x| x) {
+            self.current_piece.move_down()?;
+        }
+        Ok(())
+    }
+
+    fn move_current_left(&mut self) -> Result<()> {
+        let mut current_piece = self.current_piece.clone();
+        current_piece.move_left()?;
+        if !current_piece.components.iter().map(|cmp| {
+            self.pieces.iter().map(|piece| {
+                piece.is_blocked(cmp)
+            }).any(|x| x)
+        }).any(|x| x) {
+            self.current_piece.move_left()?;
+        }
+        Ok(())
+    }
+
+    fn move_current_right(&mut self) -> Result<()> {
+        let mut current_piece = self.current_piece.clone();
+        current_piece.move_right()?;
+        if !current_piece.components.iter().map(|cmp| {
+            self.pieces.iter().map(|piece| {
+                piece.is_blocked(cmp)
+            }).any(|x| x)
+        }).any(|x| x) {
+            self.current_piece.move_right()?;
+        }
+        Ok(())
+    }
+
+    fn rotate_current(&mut self) -> Result<()> {
+        //TODO
         Ok(())
     }
 }
@@ -333,6 +379,11 @@ impl Piece {
 
     fn rotate(&mut self) -> Result<()> {
         //TODO
+        for cmp in self.components.iter_mut() {
+            let x = cmp.x;
+            cmp.x = cmp.y;
+            cmp.y = x;
+        }
         Ok(())
     }
 
