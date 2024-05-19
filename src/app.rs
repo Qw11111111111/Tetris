@@ -7,6 +7,7 @@ use color_eyre::{
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 
 
+use num::ToPrimitive;
 use rand::{thread_rng, Rng};
 use ratatui::{
     prelude::*, 
@@ -14,7 +15,7 @@ use ratatui::{
     widgets::{block::*, canvas::{Canvas, Context, Rectangle}, Paragraph, *}
 };
 
-use std::path::Path;
+use std::{path::Path, thread, time};
 
 use std::time::Duration;
 
@@ -138,6 +139,7 @@ impl App {
             let time = 100000;
             if event::poll(Duration::from_micros(time))? {
                 self.handle_events().wrap_err("handle events failed")?;
+                thread::sleep(Duration::from_micros(20000));
             }
             if self.exit {
                 break;
@@ -243,11 +245,40 @@ impl App {
     }
 
     fn row_clear(&mut self) -> Result<()> {
+
+        for i in -9..8 {
+            let row = Piece::whole_line((10 * i).to_f64().unwrap());
+            if row.components.iter().map(|cmp| {
+                self.pieces.iter().map(|piece| {
+                    piece.is_blocked(cmp)
+                }).any(|x| x)
+            }).all(|x| x) {
+                self.delete_row((10 * i).to_f64().unwrap())?;
+                self.score += 1000;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn delete_row(&mut self, row: f64) -> Result<()> {
+        for piece in self.pieces.iter_mut() {
+            if piece.max_y < row || piece.min_y > row {
+                continue;
+            }
+            let mut count = 0;
+            for (i, cmp) in piece.components.clone().iter().enumerate() {
+                if cmp.y == row {
+                    piece.components.remove(i - count);
+                    count += 1;
+                }
+            }
+        }
         Ok(())
     }
 
     fn handle_piece(&mut self) -> Result<()> {
-        self.current_piece.move_down()?;
+        self.move_current_down()?;
         if self.current_piece_at_bottom()? {
             self.pieces.push(self.current_piece.clone());
             self.next_piece()?;
@@ -281,11 +312,9 @@ impl App {
         else if random_num == 3 {
             self.current_piece = Piece::t_piece();
         }
-        /*
         for _ in 0..rng.gen_range(0..3) {
-            self.current_piece.rotate()?;
+            self.rotate_current()?;
         }
-        */
         self.current_piece.color = colors[rng.gen_range(0..colors.len())];
         Ok(())
     }
@@ -453,18 +482,27 @@ impl Piece {
         }
     }
 
-    fn render(&mut self, ctx: &mut Context) {
-        for piece in self.components.iter() {
-            ctx.draw(&Rectangle {
-                x: piece.x,
-                y: piece.y,
-                width: piece.width,
-                height: piece.height,
-                color: self.color
-            });
+    fn whole_line(y: f64) -> Piece {
+        Piece {
+            color: Color::White,
+            components: vec![
+                SimplePiece::new(-60.0, y, 0),
+                SimplePiece::new(-50.0, y, 0),
+                SimplePiece::new(-40.0, y, 0),
+                SimplePiece::new(-30.0, y, 0),
+                SimplePiece::new(-20.0, y, 0),
+                SimplePiece::new(-10.0, y, 0),
+                SimplePiece::new(0.0, y, 0),
+                SimplePiece::new(10.0, y, 0),
+                SimplePiece::new(20.0, y, 0),
+                SimplePiece::new(30.0, y, 0),
+                SimplePiece::new(40.0, y, 0),
+                SimplePiece::new(50.0, y, 0),
+            ],
+            min_y: y,
+            max_y: y,
         }
     }
-
 }
 
 // Thes are just simple rectangles which male up all more complex structures
