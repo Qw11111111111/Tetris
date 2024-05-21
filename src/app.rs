@@ -1,21 +1,20 @@
 use crate::tui;
 
 use color_eyre::{
-    eyre::WrapErr, owo_colors::OwoColorize, Result
+    eyre::WrapErr, Result
 };
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-
 
 use num::ToPrimitive;
 use rand::{thread_rng, Rng};
 use ratatui::{
     prelude::*, 
     style::Color, 
-    widgets::{block::*, canvas::{Canvas, Context, Rectangle}, Paragraph, *}
+    widgets::{block::*, canvas::{Canvas, Rectangle}, Paragraph, *}
 };
 
-use std::{path::Path, thread, time};
+use std::{path::Path, thread};
 
 use std::time::Duration;
 
@@ -104,7 +103,6 @@ impl Widget for &App {
                                 });
                             }
                             ctx.layer();
-                            //draw the shapes here rectangle is placeholder implement render function in Piece/SimplePiece ?
                             for piece in self.pieces.iter() {
                                 for component in piece.components.iter() {
                                     ctx.draw(&Rectangle {
@@ -132,14 +130,14 @@ impl Widget for &App {
 }
 
 impl App {
-    /// runs the application's main loop until the user quits
+
     pub fn run(&mut self, terminal: &mut tui::Tui) -> Result<()> {
         loop {
             terminal.draw(|frame| self.render_frame(frame))?;
-            let time = 100000;
+            let time = 500000;
             if event::poll(Duration::from_micros(time))? {
                 self.handle_events().wrap_err("handle events failed")?;
-                thread::sleep(Duration::from_micros(20000));
+                thread::sleep(Duration::from_micros(50000));
             }
             if self.exit {
                 break;
@@ -298,20 +296,21 @@ impl App {
 
     fn next_piece(&mut self) -> Result<()> {
         let mut rng = thread_rng();
-        let random_num = rng.gen_range(0..3);
+        let random_num = rng.gen_range(0..4);//4
         let colors = vec![Color::White, Color::Cyan, Color::Yellow, Color::Red, Color::Blue, Color::Magenta, Color::Green];
         if random_num == 0 {
             self.current_piece = Piece::long();
         }
         else if random_num == 1 {
-            self.current_piece = Piece::l_piece();
+            self.current_piece = Piece::square();
         }
         else if random_num == 2 {
-            self.current_piece = Piece::square();
+            self.current_piece = Piece::l_piece(); 
         }
         else if random_num == 3 {
             self.current_piece = Piece::t_piece();
         }
+        self.current_piece.set_center();
         for _ in 0..rng.gen_range(0..3) {
             self.rotate_current()?;
         }
@@ -322,11 +321,11 @@ impl App {
     fn move_current_down(&mut self) -> Result<()> {
         let mut current_piece = self.current_piece.clone();
         current_piece.move_down()?;
-        if !current_piece.components.iter().map(|cmp| {
+        if !(current_piece.components.iter().map(|cmp| {
             self.pieces.iter().map(|piece| {
                 piece.is_blocked(cmp)
             }).any(|x| x)
-        }).any(|x| x) {
+        }).any(|x| x) || current_piece.out_of_bounds()) {
             self.current_piece.move_down()?;
         }
         Ok(())
@@ -335,11 +334,11 @@ impl App {
     fn move_current_left(&mut self) -> Result<()> {
         let mut current_piece = self.current_piece.clone();
         current_piece.move_left()?;
-        if !current_piece.components.iter().map(|cmp| {
+        if !(current_piece.components.iter().map(|cmp| {
             self.pieces.iter().map(|piece| {
                 piece.is_blocked(cmp)
             }).any(|x| x)
-        }).any(|x| x) {
+        }).any(|x| x) || current_piece.out_of_bounds()) {
             self.current_piece.move_left()?;
         }
         Ok(())
@@ -348,11 +347,11 @@ impl App {
     fn move_current_right(&mut self) -> Result<()> {
         let mut current_piece = self.current_piece.clone();
         current_piece.move_right()?;
-        if !current_piece.components.iter().map(|cmp| {
+        if !(current_piece.components.iter().map(|cmp| {
             self.pieces.iter().map(|piece| {
                 piece.is_blocked(cmp)
             }).any(|x| x)
-        }).any(|x| x) {
+        }).any(|x| x) || current_piece.out_of_bounds()) {
             self.current_piece.move_right()?;
         }
         Ok(())
@@ -360,6 +359,15 @@ impl App {
 
     fn rotate_current(&mut self) -> Result<()> {
         //TODO
+        let mut copy = self.current_piece.clone();
+        copy.rotate()?;
+        if !(copy.components.iter().map(|cmp| {
+            self.pieces.iter().map(|piece| {
+                piece.is_blocked(cmp)
+            }).any(|x| x)
+        }).any(|x| x) || copy.out_of_bounds()) {
+            self.current_piece.rotate()?;
+        }
         Ok(())
     }
 }
@@ -369,116 +377,148 @@ struct Piece {
     color: Color,
     components: Vec<SimplePiece>,
     min_y: f64,    
-    max_y: f64
+    max_y: f64,
+    center: Vec<f64>,
+    piece_type: char,
 }
 
 impl Piece {
 
     fn move_right(&mut self) -> Result<()> {
-        if self.components.clone().iter().any(|cmp|cmp.x > 49.0) {
+        if self.components.clone().iter().any(|cmp|cmp.x >= 50.0) {
             return Ok(());
         }
         for piece in self.components.iter_mut() {
             piece.x += 10.0;
+            piece.center[0] += 10.0;
         }
+        self.set_center();
+        //self.center[0] -= 10.0;
         Ok(())
     }
 
     fn move_left(&mut self) -> Result<()> {
-        if self.components.clone().iter().any(|cmp|cmp.x < -59.0) {
+        if self.components.clone().iter().any(|cmp|cmp.x <= -60.0) {
             return Ok(());
         }
         for piece in self.components.iter_mut() {
             piece.x -= 10.0;
+            piece.center[0] -= 10.0;
         }
+        //self.center[0] -= 10.0;
+        self.set_center();
         Ok(())
     }
 
     fn move_down(&mut self) -> Result<()> {
-        if self.components.clone().iter().any(|cmp|cmp.y < -89.0) {
+        if self.components.clone().iter().any(|cmp|cmp.y <= -90.0) {
             return Ok(());
         }
         for piece in self.components.iter_mut() {
             piece.y -= 10.0;
+            piece.center[1] -= 10.0;
         }
-        self.min_y -= 10.0;
-        self.max_y -= 10.0;
+        self.min_y -= get_min_y(self.components.clone());
+        self.max_y = get_max_y(self.components.clone());
+        //self.center[1] -= 10.0;
+        self.set_center();
         Ok(())
     }
 
     fn rotate(&mut self) -> Result<()> {
         //TODO
+        // In order to rotate the shape properly, it needs to be centered in the orign -> center, rotate, decenter
+        let angle: f64 = std::f64::consts::FRAC_PI_2;
+        self.set_center();
         for cmp in self.components.iter_mut() {
+            let x_shift = self.center[0];
+            let y_shift = self.center[1];
+            cmp.x -= x_shift;
+            cmp.y -= y_shift;
             let x = cmp.x;
-            cmp.x = cmp.y;
-            cmp.y = x;
+            cmp.x = cmp.x * angle.cos() - cmp.y * angle.sin() + x_shift;
+            cmp.y = x * angle.sin() + cmp.y * angle.cos() + y_shift;  
+            //cmp.center = vec![cmp.x + 5.0, cmp.y + 5.0];
         }
+        self.set_center();
+        self.min_y = get_min_y(self.components.clone());
+        self.max_y = get_max_y(self.components.clone());
         Ok(())
     }
 
     fn is_blocked(&self, piece: &SimplePiece) -> bool {
         self.components.iter().map(|cmp| {
             cmp.is_equal(piece)
-        }).any(|cmp| cmp == true)
+        }).any(|cmp| cmp)
+    }
+
+    fn out_of_bounds(&self) -> bool {
+        self.components.iter().map(|cmp| {
+            cmp.y < -90.0 || cmp.y > 80.0 || cmp.x < -60.0 || cmp.x > 50.0
+        }).any(|cmp| cmp)
     }
 
     fn long() -> Piece {
-        //returns a long Piece
         Piece {
             color: Color::White,
             components: vec![
-                SimplePiece::new(0.0, 90.0, 0),
-                SimplePiece::new(0.0, 80.0, 1),
-                SimplePiece::new(0.0, 70.0, 2),
-                SimplePiece::new(0.0, 60.0, 3)
+                SimplePiece::new(0.0, 90.0),
+                SimplePiece::new(0.0, 80.0),
+                SimplePiece::new(0.0, 70.0),
+                SimplePiece::new(0.0, 60.0)
             ],
             min_y: 60.0,
             max_y: 90.0,
+            center: vec![0.0, 75.0],
+            piece_type: 'l'
         }
     }
 
     fn square() -> Piece {
-        //returns a square
         Piece {
             color: Color::White,
             components: vec![
-                SimplePiece::new(0.0, 90.0, 0),
-                SimplePiece::new(10.0, 90.0, 0),
-                SimplePiece::new(0.0, 80.0, 1),
-                SimplePiece::new(10.0, 80.0, 1)
+                SimplePiece::new(0.0, 90.0),
+                SimplePiece::new(10.0, 90.0),
+                SimplePiece::new(0.0, 80.0),
+                SimplePiece::new(10.0, 80.0)
             ],
             min_y: 80.0,
             max_y: 90.0,
+            center: vec![0.0, 85.0],
+            piece_type: 's'
         }
     }
 
     fn t_piece() -> Piece {
-        //returns a T shaped piece
         Piece {
             color: Color::White,
             components: vec![
-                SimplePiece::new(0.0, 90.0, 0),
-                SimplePiece::new(-10.0, 90.0, 0),
-                SimplePiece::new(10.0, 90.0, 0),
-                SimplePiece::new(0.0, 80.0, 1)
+                SimplePiece::new(0.0, 90.0),
+                SimplePiece::new(-10.0, 90.0),
+                SimplePiece::new(10.0, 90.0),
+                SimplePiece::new(0.0, 80.0)
             ],
             min_y: 80.0,
             max_y: 90.0,
+            center: vec![0.0, 85.0],
+            piece_type: 't'
         }
     }
 
     fn l_piece() -> Piece {
-        //returns a L shaped piece
         Piece {
             color: Color::White,
             components: vec![
-                SimplePiece::new(0.0, 90.0, 0),
-                SimplePiece::new(10.0, 90.0, 0),
-                SimplePiece::new(0.0, 80.0, 1),
-                SimplePiece::new(0.0, 70.0, 2)
+                SimplePiece::new(0.0, 90.0),
+                SimplePiece::new(10.0, 90.0),
+                SimplePiece::new(0.0, 80.0),
+                SimplePiece::new(0.0, 70.0)
             ],
             min_y: 70.0,
             max_y: 90.0,
+            center: vec![0.0, 80.0],
+            piece_type: 'L'
         }
     }
 
@@ -486,48 +526,78 @@ impl Piece {
         Piece {
             color: Color::White,
             components: vec![
-                SimplePiece::new(-60.0, y, 0),
-                SimplePiece::new(-50.0, y, 0),
-                SimplePiece::new(-40.0, y, 0),
-                SimplePiece::new(-30.0, y, 0),
-                SimplePiece::new(-20.0, y, 0),
-                SimplePiece::new(-10.0, y, 0),
-                SimplePiece::new(0.0, y, 0),
-                SimplePiece::new(10.0, y, 0),
-                SimplePiece::new(20.0, y, 0),
-                SimplePiece::new(30.0, y, 0),
-                SimplePiece::new(40.0, y, 0),
-                SimplePiece::new(50.0, y, 0),
+                SimplePiece::new(-60.0, y),
+                SimplePiece::new(-50.0, y),
+                SimplePiece::new(-40.0, y),
+                SimplePiece::new(-30.0, y),
+                SimplePiece::new(-20.0, y),
+                SimplePiece::new(-10.0, y),
+                SimplePiece::new(0.0, y),
+                SimplePiece::new(10.0, y),
+                SimplePiece::new(20.0, y),
+                SimplePiece::new(30.0, y),
+                SimplePiece::new(40.0, y),
+                SimplePiece::new(50.0, y),
             ],
             min_y: y,
             max_y: y,
+            center: vec![0.0, y],
+            piece_type: 'w'
         }
+    }
+
+    fn set_center(&mut self) {
+        self.center = get_center(self.components.clone());
     }
 }
 
-// Thes are just simple rectangles which male up all more complex structures
 #[derive(Debug, Default, Clone)]
 struct SimplePiece {
     x: f64,
     y: f64,
     width: f64,
     height: f64,
-    layer: usize
+    center: Vec<f64>,
 }
 
 impl SimplePiece {
     
-    fn new(x: f64, y: f64, layer: usize) -> SimplePiece {
+    fn new(x: f64, y: f64) -> SimplePiece {
         SimplePiece {
             x,
             y, 
             width: 10.0,
             height: 10.0,
-            layer
+            center: vec![x + 5.0, y + 5.0],
         }
     }
 
     fn is_equal(&self, piece: &SimplePiece) -> bool {
         self.x == piece.x && self.y == piece.y && self.width == piece.width && self.height == piece.height
     }
+}
+
+fn get_center(cmps: Vec<SimplePiece>) -> Vec<f64> {
+    vec![cmps.iter().map(|cmp| cmp.center[0]).sum::<f64>() / cmps.len().to_f64().unwrap(),
+        cmps.iter().map(|cmp| cmp.center[1]).sum::<f64>() / cmps.len().to_f64().unwrap()]
+}
+
+fn get_min_y(cmps: Vec<SimplePiece>) -> f64 {
+    let mut min = f64::INFINITY;
+    for cmp in cmps.iter() {
+        if cmp.y < min {
+            min = cmp.y;
+        }
+    }
+    min
+}
+
+fn get_max_y(cmps: Vec<SimplePiece>) -> f64 {
+    let mut max = -f64::INFINITY;
+    for cmp in cmps.iter() {
+        if cmp.y > max {
+            max = cmp.y;
+        }
+    }
+    max
 }
