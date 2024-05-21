@@ -296,7 +296,7 @@ impl App {
 
     fn next_piece(&mut self) -> Result<()> {
         let mut rng = thread_rng();
-        let random_num = rng.gen_range(0..4);//4
+        let random_num = rng.gen_range(0..3);// 4 as l pieces are bugged
         let colors = vec![Color::White, Color::Cyan, Color::Yellow, Color::Red, Color::Blue, Color::Magenta, Color::Green];
         if random_num == 0 {
             self.current_piece = Piece::long();
@@ -305,13 +305,14 @@ impl App {
             self.current_piece = Piece::square();
         }
         else if random_num == 2 {
-            self.current_piece = Piece::l_piece(); 
+            self.current_piece = Piece::t_piece(); 
         }
         else if random_num == 3 {
-            self.current_piece = Piece::t_piece();
+            self.current_piece = Piece::l_piece();
         }
         self.current_piece.set_center();
         for _ in 0..rng.gen_range(0..3) {
+            break;
             self.rotate_current()?;
         }
         self.current_piece.color = colors[rng.gen_range(0..colors.len())];
@@ -321,11 +322,11 @@ impl App {
     fn move_current_down(&mut self) -> Result<()> {
         let mut current_piece = self.current_piece.clone();
         current_piece.move_down()?;
-        if !(current_piece.components.iter().map(|cmp| {
+        if !current_piece.components.iter().map(|cmp| {
             self.pieces.iter().map(|piece| {
                 piece.is_blocked(cmp)
             }).any(|x| x)
-        }).any(|x| x) || current_piece.out_of_bounds()) {
+        }).any(|x| x) {
             self.current_piece.move_down()?;
         }
         Ok(())
@@ -418,7 +419,7 @@ impl Piece {
             piece.y -= 10.0;
             piece.center[1] -= 10.0;
         }
-        self.min_y -= get_min_y(self.components.clone());
+        self.min_y = get_min_y(self.components.clone());
         self.max_y = get_max_y(self.components.clone());
         //self.center[1] -= 10.0;
         self.set_center();
@@ -429,7 +430,7 @@ impl Piece {
         //TODO
         // In order to rotate the shape properly, it needs to be centered in the orign -> center, rotate, decenter
         let angle: f64 = std::f64::consts::FRAC_PI_2;
-        self.set_center();
+        //self.set_center();
         for cmp in self.components.iter_mut() {
             let x_shift = self.center[0];
             let y_shift = self.center[1];
@@ -437,12 +438,19 @@ impl Piece {
             cmp.y -= y_shift;
             let x = cmp.x;
             cmp.x = cmp.x * angle.cos() - cmp.y * angle.sin() + x_shift;
-            cmp.y = x * angle.sin() + cmp.y * angle.cos() + y_shift;  
-            //cmp.center = vec![cmp.x + 5.0, cmp.y + 5.0];
+            cmp.y = x * angle.sin() + cmp.y * angle.cos() + y_shift;
         }
         self.set_center();
-        self.min_y = get_min_y(self.components.clone());
+        self.min_y = get_min_y(self.components.clone()); 
         self.max_y = get_max_y(self.components.clone());
+        let diff = round_to_tenths(self.min_y);
+        self.min_y -= diff;
+        self.max_y -= diff;
+        for cmp in self.components.iter_mut() {
+            cmp.x -= diff;
+            cmp.y -= diff;
+            cmp.center[1] -= diff;
+        }
         Ok(())
     }
 
@@ -600,4 +608,10 @@ fn get_max_y(cmps: Vec<SimplePiece>) -> f64 {
         }
     }
     max
+}
+
+fn round_to_tenths(num: f64) -> f64 {
+    let int = num.round().to_i64().unwrap();
+    let diff = num / 10.0 - (int / 10).to_f64().unwrap();
+    diff * 10.0
 }
