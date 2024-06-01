@@ -138,6 +138,7 @@ impl App {
             if event::poll(Duration::from_micros(time))? {
                 self.handle_events().wrap_err("handle events failed")?;
                 thread::sleep(Duration::from_micros(50000));
+                //continue; //do not know if piece should move down every tick (i think it should), else uncomment
             }
             if self.exit {
                 break;
@@ -296,7 +297,7 @@ impl App {
 
     fn next_piece(&mut self) -> Result<()> {
         let mut rng = thread_rng();
-        let random_num = rng.gen_range(0..3);// 4 as l pieces are bugged
+        let random_num = rng.gen_range(0..4);// 4 as l pieces are bugged
         let colors = vec![Color::White, Color::Cyan, Color::Yellow, Color::Red, Color::Blue, Color::Magenta, Color::Green];
         if random_num == 0 {
             self.current_piece = Piece::long();
@@ -312,7 +313,6 @@ impl App {
         }
         self.current_piece.set_center();
         for _ in 0..rng.gen_range(0..3) {
-            break;
             self.rotate_current()?;
         }
         self.current_piece.color = colors[rng.gen_range(0..colors.len())];
@@ -379,8 +379,7 @@ struct Piece {
     components: Vec<SimplePiece>,
     min_y: f64,    
     max_y: f64,
-    center: Vec<f64>,
-    piece_type: char,
+    center: Vec<f64>
 }
 
 impl Piece {
@@ -431,14 +430,14 @@ impl Piece {
         // In order to rotate the shape properly, it needs to be centered in the orign -> center, rotate, decenter
         let angle: f64 = std::f64::consts::FRAC_PI_2;
         //self.set_center();
+        let x_shift = self.center[0];
+        let y_shift = self.center[1];
         for cmp in self.components.iter_mut() {
-            let x_shift = self.center[0];
-            let y_shift = self.center[1];
-            cmp.x -= x_shift;
-            cmp.y -= y_shift;
+            //cmp.x -= x_shift;
+            //cmp.y -= y_shift;
             let x = cmp.x;
-            cmp.x = cmp.x * angle.cos() - cmp.y * angle.sin() + x_shift;
-            cmp.y = x * angle.sin() + cmp.y * angle.cos() + y_shift;
+            cmp.x = cmp.x * angle.cos() - cmp.y * angle.sin() + x_shift - x_shift * angle.cos() + y_shift * angle.sin();
+            cmp.y = x * angle.sin() + cmp.y * angle.cos() + y_shift - y_shift * angle.cos() - x_shift * angle.sin();
         }
         self.set_center();
         self.min_y = get_min_y(self.components.clone()); 
@@ -478,7 +477,6 @@ impl Piece {
             min_y: 60.0,
             max_y: 90.0,
             center: vec![0.0, 75.0],
-            piece_type: 'l'
         }
     }
 
@@ -494,7 +492,6 @@ impl Piece {
             min_y: 80.0,
             max_y: 90.0,
             center: vec![0.0, 85.0],
-            piece_type: 's'
         }
     }
 
@@ -510,7 +507,6 @@ impl Piece {
             min_y: 80.0,
             max_y: 90.0,
             center: vec![0.0, 85.0],
-            piece_type: 't'
         }
     }
 
@@ -525,8 +521,7 @@ impl Piece {
             ],
             min_y: 70.0,
             max_y: 90.0,
-            center: vec![0.0, 80.0],
-            piece_type: 'L'
+            center: vec![0.0, 85.0],
         }
     }
 
@@ -550,7 +545,6 @@ impl Piece {
             min_y: y,
             max_y: y,
             center: vec![0.0, y],
-            piece_type: 'w'
         }
     }
 
