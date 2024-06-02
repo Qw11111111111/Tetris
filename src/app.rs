@@ -296,7 +296,7 @@ impl App {
 
     fn next_piece(&mut self) -> Result<()> {
         let mut rng = thread_rng();
-        let random_num = rng.gen_range(0..3);// 4 as l pieces are bugged
+        let random_num = rng.gen_range(0..4);// 4 as l pieces are bugged
         let colors = vec![Color::White, Color::Cyan, Color::Yellow, Color::Red, Color::Blue, Color::Magenta, Color::Green];
         if random_num == 0 {
             self.current_piece = Piece::long();
@@ -312,7 +312,6 @@ impl App {
         }
         self.current_piece.set_center();
         for _ in 0..rng.gen_range(0..3) {
-            break;
             self.rotate_current()?;
         }
         self.current_piece.color = colors[rng.gen_range(0..colors.len())];
@@ -380,7 +379,6 @@ struct Piece {
     min_y: f64,    
     max_y: f64,
     center: Vec<f64>,
-    piece_type: char,
 }
 
 impl Piece {
@@ -443,13 +441,15 @@ impl Piece {
         self.set_center();
         self.min_y = get_min_y(self.components.clone()); 
         self.max_y = get_max_y(self.components.clone());
-        let diff = round_to_tenths(self.min_y);
-        self.min_y -= diff;
-        self.max_y -= diff;
+        let y_diff = round_to_tenths(self.min_y);
+        let x_diff = round_to_tenths(get_min_x(self.components.clone()));
+        self.min_y -= y_diff;
+        self.max_y -= y_diff;
         for cmp in self.components.iter_mut() {
-            cmp.x -= diff;
-            cmp.y -= diff;
-            cmp.center[1] -= diff;
+            cmp.x -= x_diff;
+            cmp.y -= y_diff;
+            cmp.center[1] -= y_diff;
+            cmp.center[0] -= x_diff;
         }
         Ok(())
     }
@@ -478,7 +478,6 @@ impl Piece {
             min_y: 60.0,
             max_y: 90.0,
             center: vec![0.0, 75.0],
-            piece_type: 'l'
         }
     }
 
@@ -494,7 +493,6 @@ impl Piece {
             min_y: 80.0,
             max_y: 90.0,
             center: vec![0.0, 85.0],
-            piece_type: 's'
         }
     }
 
@@ -510,7 +508,6 @@ impl Piece {
             min_y: 80.0,
             max_y: 90.0,
             center: vec![0.0, 85.0],
-            piece_type: 't'
         }
     }
 
@@ -526,7 +523,6 @@ impl Piece {
             min_y: 70.0,
             max_y: 90.0,
             center: vec![0.0, 80.0],
-            piece_type: 'L'
         }
     }
 
@@ -550,7 +546,6 @@ impl Piece {
             min_y: y,
             max_y: y,
             center: vec![0.0, y],
-            piece_type: 'w'
         }
     }
 
@@ -608,6 +603,16 @@ fn get_max_y(cmps: Vec<SimplePiece>) -> f64 {
         }
     }
     max
+}
+
+fn get_min_x(cmps: Vec<SimplePiece>) -> f64 {
+    let mut min = f64::INFINITY;
+    for cmp in cmps.iter() {
+        if cmp.x < min {
+            min = cmp.x;
+        }
+    }
+    min
 }
 
 fn round_to_tenths(num: f64) -> f64 {
