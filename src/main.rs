@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         number = read(&path)?;
     }
 
-    let mut app = App::new();
+    let mut app = App::new()?;
     app.highscore = number;
     app.run(&mut terminal)?;
     tui::restore()?;

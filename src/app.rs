@@ -28,7 +28,8 @@ pub struct App {
     on_pause: bool,
     dead: bool,
     current_piece: Piece,
-    pieces: Vec<Piece>
+    pieces: Vec<Piece>,
+    next_piece: Piece,
 }
 
 impl Widget for &App {
@@ -51,13 +52,18 @@ impl Widget for &App {
                 let block = Block::default()
                                 .borders(Borders::ALL)
                                 .border_style(Style::default().bold())
-                                .title(Title::from("Tetris".bold())
+                                .title(Title::from(" Tetris ".bold())
                                         .alignment(Alignment::Center))
                                 .bg(bg_color)
                                 .fg(fg_color);
 
                 let score_text = Line::from(self.score.to_string().bold());        
                 let highscore_text = Line::from(self.highscore.to_string().bold());
+
+                Paragraph::new(Line::from(" Next Piece              "))
+                    .block(block.clone())
+                    .right_aligned()
+                    .render(area, buf);
 
                 Paragraph::new(score_text)
                     .block(block.clone())
@@ -70,7 +76,16 @@ impl Widget for &App {
                     .render(area, buf);
 
                 if self.dead {
-                    let death_text = Line::from(vec![Span::from("You died with score "), Span::from(self.score.to_string().bold())]);
+                    let death_text = Line::from(vec![Span::from(" You died with score "), Span::from(self.score.to_string().bold())]);
+                    Paragraph::new(death_text)
+                    .block(block.clone())
+                    .alignment(Alignment::Center)
+                    .render(area, buf);
+
+                }
+                
+                if self.on_pause {
+                    let death_text = Line::from(vec![Span::from(" Paused "), Span::from(self.score.to_string().bold())]);
                     Paragraph::new(death_text)
                     .block(block.clone())
                     .centered()
@@ -115,6 +130,15 @@ impl Widget for &App {
                                 }
                             }
                             ctx.layer();
+                            for component in self.next_piece.components.iter() {
+                                ctx.draw(&Rectangle {
+                                    x: component.x,
+                                    y: component.y,
+                                    width: component.width,
+                                    height: component.height,
+                                    color: self.next_piece.color
+                                });
+                            }
                         })
                         .render(area, buf);
 
@@ -174,16 +198,20 @@ impl App {
         }
     }
 
-    pub fn new() -> App {
-        App {
+    pub fn new() -> Result<App> {
+        let mut app = App {
             score: 0,
             highscore: 0,
             exit: false,
             dead: false,
             on_pause: false,
-            current_piece: Piece::long(),
-            pieces: vec![]
-        }
+            current_piece: Piece::placeholder(), // make these random
+            pieces: vec![],
+            next_piece: Piece::placeholder(),
+        };
+        app.init_queue()?;
+        app.next_piece()?;
+        Ok(app)
     }
 
     fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<()> {
@@ -295,26 +323,63 @@ impl App {
     }
 
     fn next_piece(&mut self) -> Result<()> {
+        self.current_piece = self.next_piece.clone();
         let mut rng = thread_rng();
-        let random_num = rng.gen_range(0..4);// 4 as l pieces are bugged
+        let random_num = rng.gen_range(0..4);
         let colors = vec![Color::White, Color::Cyan, Color::Yellow, Color::Red, Color::Blue, Color::Magenta, Color::Green];
         if random_num == 0 {
-            self.current_piece = Piece::long();
+            self.next_piece = Piece::long();
         }
         else if random_num == 1 {
-            self.current_piece = Piece::square();
+            self.next_piece = Piece::square();
         }
         else if random_num == 2 {
-            self.current_piece = Piece::t_piece(); 
+            self.next_piece = Piece::t_piece(); 
         }
         else if random_num == 3 {
-            self.current_piece = Piece::l_piece();
+            self.next_piece = Piece::l_piece();
         }
         self.current_piece.set_center();
         for _ in 0..rng.gen_range(0..3) {
             self.rotate_current()?;
         }
-        self.current_piece.color = colors[rng.gen_range(0..colors.len())];
+        self.next_piece.color = colors[rng.gen_range(0..colors.len())];
+
+        for _ in 0..12 {
+            self.next_piece.move_right(true)?;
+            self.current_piece.move_left(true)?;
+        }
+        for _ in 0..3 {
+            self.next_piece.move_down()?;
+            self.current_piece.move_up()?;
+        }
+        Ok(())
+    }
+
+    fn init_queue(&mut self) -> Result<()> {
+        let mut rng = thread_rng();
+        let random_num = rng.gen_range(0..4);
+        let colors = vec![Color::White, Color::Cyan, Color::Yellow, Color::Red, Color::Blue, Color::Magenta, Color::Green];
+        if random_num == 0 {
+            self.next_piece = Piece::long();
+        }
+        else if random_num == 1 {
+            self.next_piece = Piece::square();
+        }
+        else if random_num == 2 {
+            self.next_piece = Piece::t_piece(); 
+        }
+        else if random_num == 3 {
+            self.next_piece = Piece::l_piece();
+        }
+        self.next_piece.color = colors[rng.gen_range(0..colors.len())];
+
+        for _ in 0..12 {
+            self.next_piece.move_right(true)?;
+        }
+        for _ in 0..3 {
+            self.next_piece.move_down()?;
+        }
         Ok(())
     }
 
@@ -333,26 +398,26 @@ impl App {
 
     fn move_current_left(&mut self) -> Result<()> {
         let mut current_piece = self.current_piece.clone();
-        current_piece.move_left()?;
+        current_piece.move_left(false)?;
         if !(current_piece.components.iter().map(|cmp| {
             self.pieces.iter().map(|piece| {
                 piece.is_blocked(cmp)
             }).any(|x| x)
         }).any(|x| x) || current_piece.out_of_bounds()) {
-            self.current_piece.move_left()?;
+            self.current_piece.move_left(false)?;
         }
         Ok(())
     }
 
     fn move_current_right(&mut self) -> Result<()> {
         let mut current_piece = self.current_piece.clone();
-        current_piece.move_right()?;
+        current_piece.move_right(false)?;
         if !(current_piece.components.iter().map(|cmp| {
             self.pieces.iter().map(|piece| {
                 piece.is_blocked(cmp)
             }).any(|x| x)
         }).any(|x| x) || current_piece.out_of_bounds()) {
-            self.current_piece.move_right()?;
+            self.current_piece.move_right(false)?;
         }
         Ok(())
     }
@@ -383,8 +448,8 @@ struct Piece {
 
 impl Piece {
 
-    fn move_right(&mut self) -> Result<()> {
-        if self.components.clone().iter().any(|cmp|cmp.x >= 50.0) {
+    fn move_right(&mut self, force: bool) -> Result<()> {
+        if self.components.clone().iter().any(|cmp|cmp.x >= 50.0) && !force {
             return Ok(());
         }
         for piece in self.components.iter_mut() {
@@ -396,8 +461,8 @@ impl Piece {
         Ok(())
     }
 
-    fn move_left(&mut self) -> Result<()> {
-        if self.components.clone().iter().any(|cmp|cmp.x <= -60.0) {
+    fn move_left(&mut self, force: bool) -> Result<()> {
+        if self.components.clone().iter().any(|cmp|cmp.x <= -60.0) && !force {
             return Ok(());
         }
         for piece in self.components.iter_mut() {
@@ -423,6 +488,22 @@ impl Piece {
         self.set_center();
         Ok(())
     }
+
+    fn move_up(&mut self) -> Result<()> {
+        if self.components.clone().iter().any(|cmp|cmp.y >= 80.0) {
+            return Ok(());
+        }
+        for piece in self.components.iter_mut() {
+            piece.y += 10.0;
+            piece.center[1] += 10.0;
+        }
+        self.min_y = get_min_y(self.components.clone());
+        self.max_y = get_max_y(self.components.clone());
+        //self.center[1] -= 10.0;
+        self.set_center();
+        Ok(())
+    }
+
 
     fn rotate(&mut self) -> Result<()> {
         //TODO
@@ -546,6 +627,16 @@ impl Piece {
             min_y: y,
             max_y: y,
             center: vec![0.0, y],
+        }
+    }
+
+    fn placeholder() -> Piece {
+        Piece {
+            color: Color::White,
+            components: vec![],
+            min_y: 0.0,
+            max_y: 0.0,
+            center: vec![0.0, 0.0],
         }
     }
 
