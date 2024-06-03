@@ -271,7 +271,7 @@ impl App {
     }
 
     fn row_clear(&mut self) -> Result<()> {
-
+        let mut deleted_rows = vec![];
         for i in -9..8 {
             let row = Piece::whole_line((10 * i).to_f64().unwrap());
             if row.components.iter().map(|cmp| {
@@ -281,7 +281,12 @@ impl App {
             }).all(|x| x) {
                 self.delete_row((10 * i).to_f64().unwrap())?;
                 self.score += 1000;
+                deleted_rows.push((10 * i).to_f64().unwrap());
             }
+        }
+        deleted_rows.reverse();
+        for val in deleted_rows.iter() {
+            self.gravity(*val)?;
         }
 
         Ok(())
@@ -298,6 +303,18 @@ impl App {
                     piece.components.remove(i - count);
                     count += 1;
                 }
+            }
+        }
+        Ok(())
+    }
+
+    fn gravity(&mut self, y: f64) -> Result<()> {
+        for piece in self.pieces.iter_mut() {
+            for cmp in piece.components.iter_mut() {
+                if cmp.y < y {
+                    continue;
+                }
+                cmp.y -= 10.0;
             }
         }
         Ok(())
