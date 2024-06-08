@@ -375,7 +375,7 @@ impl App {
 
     fn init_queue(&mut self) -> Result<()> {
         let mut rng = thread_rng();
-        let random_num = rng.gen_range(0..4);
+        let random_num = rng.gen_range(0..=4);
         let colors = vec![Color::White, Color::Cyan, Color::Yellow, Color::Red, Color::Blue, Color::Magenta, Color::Green];
         if random_num == 0 {
             self.next_piece = Piece::long();
@@ -387,7 +387,22 @@ impl App {
             self.next_piece = Piece::t_piece(); 
         }
         else if random_num == 3 {
-            self.next_piece = Piece::l_piece();
+            let random_num_for_orientation = rng.gen_range(0.0..1.0);
+            if random_num_for_orientation < 0.5 {
+                self.next_piece = Piece::inverted_l_piece();
+            }
+            else {
+                self.next_piece = Piece::l_piece();
+            }
+        }
+        else if random_num == 4 {
+            let random_num_for_orientation = rng.gen_range(0.0..1.0);
+            if random_num_for_orientation < 0.5 {
+                self.next_piece = Piece::inverted_z_piece();
+            }
+            else {
+                self.next_piece = Piece::z_piece();
+            }
         }
         self.next_piece.color = colors[rng.gen_range(0..colors.len())];
 
@@ -499,8 +514,8 @@ impl Piece {
             piece.y -= 10.0;
             piece.center[1] -= 10.0;
         }
-        self.min_y = get_min_y(self.components.clone());
-        self.max_y = get_max_y(self.components.clone());
+        self.min_y -= 10.0;
+        self.max_y -= 10.0;
         //self.center[1] -= 10.0;
         self.set_center();
         Ok(())
@@ -514,8 +529,8 @@ impl Piece {
             piece.y += 10.0;
             piece.center[1] += 10.0;
         }
-        self.min_y = get_min_y(self.components.clone());
-        self.max_y = get_max_y(self.components.clone());
+        self.min_y += 10.0;
+        self.max_y += 10.0;
         //self.center[1] -= 10.0;
         self.set_center();
         Ok(())
@@ -614,13 +629,57 @@ impl Piece {
             color: Color::White,
             components: vec![
                 SimplePiece::new(0.0, 90.0),
-                SimplePiece::new(10.0, 90.0),
                 SimplePiece::new(0.0, 80.0),
-                SimplePiece::new(0.0, 70.0)
+                SimplePiece::new(0.0, 70.0),
+                SimplePiece::new(10.0, 70.0)
             ],
             min_y: 70.0,
             max_y: 90.0,
             center: vec![0.0, 80.0],
+        }
+    }
+    
+    fn inverted_l_piece() -> Piece {
+        Piece {
+            color: Color::White,
+            components: vec![
+                SimplePiece::new(0.0, 90.0),
+                SimplePiece::new(0.0, 80.0),
+                SimplePiece::new(0.0, 70.0),
+                SimplePiece::new(-10.0, 70.0)
+            ],
+            min_y: 70.0,
+            max_y: 90.0,
+            center: vec![0.0, 80.0],
+        }
+    }
+
+    fn z_piece() -> Piece {
+        Piece {
+            color: Color::White,
+            components: vec![
+                SimplePiece::new(-10.0, 90.0),
+                SimplePiece::new(0.0, 90.0),
+                SimplePiece::new(0.0, 80.0),
+                SimplePiece::new(10.0, 80.0)
+            ],
+            min_y: 80.0,
+            max_y: 90.0,
+            center: vec![0.0, 90.0],
+        }
+    }
+    fn inverted_z_piece() -> Piece {
+        Piece {
+            color: Color::White,
+            components: vec![
+                SimplePiece::new(-10.0, 80.0),
+                SimplePiece::new(0.0, 80.0),
+                SimplePiece::new(0.0, 90.0),
+                SimplePiece::new(10.0, 90.0)
+            ],
+            min_y: 80.0,
+            max_y: 90.0,
+            center: vec![0.0, 90.0],
         }
     }
 
