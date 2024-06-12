@@ -30,6 +30,7 @@ pub struct App {
     current_piece: Piece,
     pieces: Vec<Piece>,
     next_piece: Piece,
+    padding: f64,
 }
 
 impl Widget for &App {
@@ -101,19 +102,19 @@ impl Widget for &App {
                         .background_color(Color::Black)
                         .paint(|ctx| {
                             ctx.draw(&Rectangle {
-                                x: -60.0, 
+                                x: -70.0, 
                                 y: -90.0,
-                                width: 120.0,
+                                width: 140.0,
                                 height: 180.0,
                                 color: Color::White,
                             });
                             ctx.layer();
                             for component in self.current_piece.components.iter() {
                                 ctx.draw(&Rectangle {
-                                    x: component.x,
-                                    y: component.y,
-                                    width: component.width,
-                                    height: component.height,
+                                    x: component.x + self.padding,
+                                    y: component.y + self.padding,
+                                    width: component.width - self.padding,
+                                    height: component.height - self.padding,
                                     color: self.current_piece.color
                                 });
                             }
@@ -121,10 +122,10 @@ impl Widget for &App {
                             for piece in self.pieces.iter() {
                                 for component in piece.components.iter() {
                                     ctx.draw(&Rectangle {
-                                        x: component.x,
-                                        y: component.y,
-                                        width: component.width,
-                                        height: component.height,
+                                        x: component.x + self.padding,
+                                        y: component.y + self.padding,
+                                        width: component.width - self.padding,
+                                        height: component.height - self.padding,
                                         color: piece.color
                                     });
                                 }
@@ -132,10 +133,10 @@ impl Widget for &App {
                             ctx.layer();
                             for component in self.next_piece.components.iter() {
                                 ctx.draw(&Rectangle {
-                                    x: component.x,
-                                    y: component.y,
-                                    width: component.width,
-                                    height: component.height,
+                                    x: component.x + self.padding,
+                                    y: component.y + self.padding,
+                                    width: component.width - self.padding,
+                                    height: component.height - self.padding,
                                     color: self.next_piece.color
                                 });
                             }
@@ -158,10 +159,13 @@ impl App {
     pub fn run(&mut self, terminal: &mut tui::Tui) -> Result<()> {
         loop {
             terminal.draw(|frame| self.render_frame(frame))?;
+            self.handle_piece()?;
+            self.is_dead()?;
             let time = 500000;
             if event::poll(Duration::from_micros(time))? {
                 self.handle_events().wrap_err("handle events failed")?;
-                thread::sleep(Duration::from_micros(50000));
+                thread::sleep(Duration::from_micros(80000));
+                continue;
             }
             if self.exit {
                 break;
@@ -169,10 +173,7 @@ impl App {
             if self.on_pause || self.dead {
                 continue;
             }
-            self.handle_piece()?;
-            self.row_clear()?;
             self.highscore();
-            self.is_dead()?;
         }
         Ok(())
     }
@@ -208,6 +209,7 @@ impl App {
             current_piece: Piece::placeholder(), // make these random
             pieces: vec![],
             next_piece: Piece::placeholder(),
+            padding: 0.0, // 2.0 seems good
         };
         app.init_queue()?;
         app.next_piece()?;
@@ -270,9 +272,11 @@ impl App {
         Ok(())
     }
 
-    fn row_clear(&mut self) -> Result<()> {
+    fn row_clear(&mut self, min: f64, max: f64) -> Result<()> {
         let mut deleted_rows = vec![];
-        for i in -9..8 {
+        let start = (min / 10.0).to_i8().unwrap();
+        let stop = (max / 10.0).to_i8().unwrap();
+        for i in start..(stop + 1) {
             let row = Piece::whole_line((10 * i).to_f64().unwrap());
             if row.components.iter().map(|cmp| {
                 self.pieces.iter().map(|piece| {
@@ -285,6 +289,9 @@ impl App {
             }
         }
         deleted_rows.reverse();
+        if deleted_rows.len() > 1 {
+            self.score += 1000 * deleted_rows.len().to_u64().unwrap();
+        }
         for val in deleted_rows.iter() {
             self.gravity(*val)?;
         }
@@ -324,6 +331,7 @@ impl App {
         self.move_current_down()?;
         if self.current_piece_at_bottom()? {
             self.pieces.push(self.current_piece.clone());
+            self.row_clear(self.current_piece.min_y, self.current_piece.max_y)?;
             self.next_piece()?;
         }
         Ok(())
@@ -481,7 +489,7 @@ struct Piece {
 impl Piece {
 
     fn move_right(&mut self, force: bool) -> Result<()> {
-        if self.components.clone().iter().any(|cmp|cmp.x >= 50.0) && !force {
+        if self.components.clone().iter().any(|cmp|cmp.x >= 60.0) && !force {
             return Ok(());
         }
         for piece in self.components.iter_mut() {
@@ -494,7 +502,7 @@ impl Piece {
     }
 
     fn move_left(&mut self, force: bool) -> Result<()> {
-        if self.components.clone().iter().any(|cmp|cmp.x <= -60.0) && !force {
+        if self.components.clone().iter().any(|cmp|cmp.x <= -70.0) && !force {
             return Ok(());
         }
         for piece in self.components.iter_mut() {
@@ -570,12 +578,12 @@ impl Piece {
     fn is_blocked(&self, piece: &SimplePiece) -> bool {
         self.components.iter().map(|cmp| {
             cmp.is_equal(piece)
-        }).any(|cmp| cmp)
+        }).any(|x| x)
     }
 
     fn out_of_bounds(&self) -> bool {
         self.components.iter().map(|cmp| {
-            cmp.y < -90.0 || cmp.y > 80.0 || cmp.x < -60.0 || cmp.x > 50.0
+            cmp.y < -90.0 || cmp.y > 80.0 || cmp.x < -70.0 || cmp.x > 60.0
         }).any(|cmp| cmp)
     }
 
@@ -687,6 +695,7 @@ impl Piece {
         Piece {
             color: Color::White,
             components: vec![
+                SimplePiece::new(-70.0, y),
                 SimplePiece::new(-60.0, y),
                 SimplePiece::new(-50.0, y),
                 SimplePiece::new(-40.0, y),
@@ -699,10 +708,11 @@ impl Piece {
                 SimplePiece::new(30.0, y),
                 SimplePiece::new(40.0, y),
                 SimplePiece::new(50.0, y),
+                SimplePiece::new(60.0, y),
             ],
             min_y: y,
             max_y: y,
-            center: vec![0.0, y],
+            center: vec![5.0, y + 5.0],
         }
     }
 
@@ -743,7 +753,7 @@ impl SimplePiece {
     }
 
     fn is_equal(&self, piece: &SimplePiece) -> bool {
-        self.x == piece.x && self.y == piece.y && self.width == piece.width && self.height == piece.height
+        self.x.to_i8() == piece.x.to_i8() && self.y.to_i8() == piece.y.to_i8()
     }
 }
 
