@@ -162,7 +162,7 @@ impl App {
             let time = 500000;
             if event::poll(Duration::from_micros(time))? {
                 self.handle_events().wrap_err("handle events failed")?;
-                thread::sleep(Duration::from_micros(80000));
+                thread::sleep(Duration::from_micros(50000));
             }
             if self.exit {
                 break;
