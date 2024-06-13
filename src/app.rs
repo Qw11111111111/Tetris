@@ -159,13 +159,10 @@ impl App {
     pub fn run(&mut self, terminal: &mut tui::Tui) -> Result<()> {
         loop {
             terminal.draw(|frame| self.render_frame(frame))?;
-            self.handle_piece()?;
-            self.is_dead()?;
             let time = 500000;
             if event::poll(Duration::from_micros(time))? {
                 self.handle_events().wrap_err("handle events failed")?;
                 thread::sleep(Duration::from_micros(80000));
-                continue;
             }
             if self.exit {
                 break;
@@ -173,7 +170,9 @@ impl App {
             if self.on_pause || self.dead {
                 continue;
             }
+            self.handle_piece()?;
             self.highscore();
+            self.is_dead()?;
         }
         Ok(())
     }
@@ -223,7 +222,7 @@ impl App {
             KeyCode::Enter => self.restart()?,
             KeyCode::Right => self.move_current_right()?,
             KeyCode::Left => self.move_current_left()?,
-            KeyCode::Down => self.move_current_down()?,
+            //KeyCode::Down => self.move_current_down()?,
             KeyCode::Up => self.rotate_current()?,
             _ => {}
         }
@@ -282,7 +281,7 @@ impl App {
                 self.pieces.iter().map(|piece| {
                     piece.is_blocked(cmp)
                 }).any(|x| x)
-            }).all(|x| x) {
+            }).all(|x| x) { // if the piece is manually moved in the moment it hits the bottom this evauates to false somehow
                 self.delete_row((10 * i).to_f64().unwrap())?;
                 self.score += 1000;
                 deleted_rows.push((10 * i).to_f64().unwrap());
